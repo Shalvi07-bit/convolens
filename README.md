@@ -1,6 +1,6 @@
 # ConvoLens — RAG Chatbot for Conversation Intelligence
 
-A full end-to-end RAG system that ingests a multi-conversation CSV, builds topic checkpoints, extracts a user persona, and powers a chatbot. Built for the KaStack Labs AI/ML Engineer (Intern) assignment.
+A full end-to-end RAG system that ingests a multi-conversation CSV, builds topic checkpoints, extracts a user persona, and powers a chatbot. 
 
 ---
 
