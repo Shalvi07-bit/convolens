@@ -355,7 +355,7 @@ function showTab(name) {
     el.classList.toggle('active', ['chat','topics','persona'][i]===name);
   });
   if(name==='topics' && !topicsLoaded) loadTopics();
-  if(name==='persona' && !personaLoaded) loadPersonaTab();
+  if(name==='persona' && !personaTabLoaded) loadPersonaTab();
 }
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
@@ -429,13 +429,14 @@ function escHtml(t) {
 }
 
 // ── Persona sidebar ──────────────────────────────────────────────────────────
-let personaLoaded = false;
+let personaSidebarLoaded = false;
+let personaTabLoaded = false;
 async function loadPersonaSidebar() {
   try {
     const res = await fetch(API + '/persona');
     const p = await res.json();
     renderPersonaSidebar(p);
-    personaLoaded = true;
+    personaSidebarLoaded = true;
   } catch(e) {
     document.getElementById('sidebar-persona').innerHTML =
       '<div style="color:var(--muted);font-size:12px;">API offline — run app.py first</div>';
@@ -444,6 +445,13 @@ async function loadPersonaSidebar() {
 
 function renderPersonaSidebar(p) {
   const el = document.getElementById('sidebar-persona');
+  if (p.note === 'skipped' || p.parse_error) {
+    el.innerHTML = `
+      <div class="sidebar-label">Persona preview</div>
+      <div class="persona-val">Persona extraction was skipped. Run the pipeline with <code>GROQ_API_KEY</code> and without <code>--skip-summarize</code> for a full persona.</div>
+    `;
+    return;
+  }
   const renderList = (arr) => (arr||[]).map(x=>`<span class="persona-tag">${escHtml(x)}</span>`).join('');
   el.innerHTML = `
     <div class="sidebar-label">Persona preview</div>
@@ -480,8 +488,20 @@ async function loadPersonaTab() {
   try {
     const res = await fetch(API + '/persona');
     const p = await res.json();
-    document.getElementById('persona-full').innerHTML =
-      `<pre style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);white-space:pre-wrap;background:var(--surface);padding:20px;border-radius:var(--radius);border:1px solid var(--border)">${escHtml(JSON.stringify(p,null,2))}</pre>`;
+    const el = document.getElementById('persona-full');
+    if (p.note === 'skipped' || p.parse_error) {
+      el.innerHTML = `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;color:var(--text);line-height:1.7;">
+          Persona extraction was skipped for this offline build.<br>
+          For the final enriched persona, run:<br><br>
+          <code>$env:GROQ_API_KEY="your_key"</code><br>
+          <code>python build_pipeline.py --csv data/conversations.csv --force</code>
+        </div>`;
+    } else {
+      el.innerHTML =
+        `<pre style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);white-space:pre-wrap;background:var(--surface);padding:20px;border-radius:var(--radius);border:1px solid var(--border)">${escHtml(JSON.stringify(p,null,2))}</pre>`;
+    }
+    personaTabLoaded = true;
   } catch(e) {
     document.getElementById('persona-full').innerHTML = '<p style="color:var(--muted)">API offline.</p>';
   }
