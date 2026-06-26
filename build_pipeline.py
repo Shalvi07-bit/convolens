@@ -12,12 +12,17 @@ from core.topic_detector import detect_topics
 from core.summarizer import summarize_topic, summarize_checkpoint
 from core.persona_extractor import extract_persona
 from core.retriever import RAGRetriever
+from core.persona_drift import save_persona_drift
+from core.intent_classifier import train_intent_classifier, save_intent_classifier, write_report
 
 DATA_DIR  = Path("data")
 INDEX_DIR = DATA_DIR / "index"
 CHECKPOINT_FILE = DATA_DIR / "checkpoints.json"
 TOPICS_FILE     = DATA_DIR / "topic_segments.json"
 PERSONA_FILE    = DATA_DIR / "persona.json"
+DRIFT_FILE      = DATA_DIR / "persona_drift.json"
+INTENT_MODEL    = INDEX_DIR / "intent_classifier.pkl"
+INTENT_REPORT   = DATA_DIR / "intent_benchmark.json"
 
 # ── Limits to stay within Groq free tier ────────────────────────────────────
 MAX_TOPICS      = 60   # summarise at most 60 topics
@@ -118,15 +123,33 @@ def main():
         PERSONA_FILE.write_text(json.dumps(persona, indent=2))
         print(f"  Persona saved")
 
-    # 5. FAISS indices
-    print("\n[5/5] Building FAISS vector indices …")
+    # 5. Daily persona drift
+    print("\n[5/7] Detecting persona drift by day ...")
+    if DRIFT_FILE.exists() and not args.force:
+        print("  [cached]")
+    else:
+        drift = save_persona_drift(messages, persona, DRIFT_FILE)
+        print(f"  Saved {len(drift['timeline'])} day states and {len(drift['drifts'])} drifts")
+
+    # 6. Offline intent classifier
+    print("\n[6/7] Training offline intent classifier ...")
+    if INTENT_MODEL.exists() and not args.force:
+        print("  [cached]")
+    else:
+        intent_model = train_intent_classifier(messages)
+        save_intent_classifier(intent_model, INTENT_MODEL)
+        write_report(INTENT_MODEL, INTENT_REPORT)
+        print(f"  Saved intent model to {INTENT_MODEL}")
+
+    # 7. FAISS indices
+    print("\n[7/7] Building FAISS vector indices ...")
     retriever = RAGRetriever()
     retriever.build_topic_index(topic_segments)
     retriever.build_message_index(messages)
     retriever.save(str(INDEX_DIR))
 
-    print("\n✅ Pipeline complete!")
-    print(f"   • {len(checkpoints)} checkpoints  • {len(topic_segments)} topics")
+    print("\nPipeline complete!")
+    print(f"   - {len(checkpoints)} checkpoints  - {len(topic_segments)} topics")
 
 if __name__ == "__main__":
     main()

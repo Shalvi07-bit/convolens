@@ -1,0 +1,6 @@
+{
+  "messages": 20,
+  "avg_latency_ms": 1.338,
+  "max_latency_ms": 2.581,
+  "under_200ms": true
+}

@@ -4,6 +4,37 @@ A full end-to-end RAG system that ingests a multi-conversation CSV, builds topic
 
 ---
 
+## L2 Assignment Additions
+
+This repo now includes the required L2 modules:
+
+| Part | File | Output |
+|------|------|--------|
+| Adaptive persona drift | `core/persona_drift.py` | `data/persona_drift.json` with `Day N -> mood & tone` timeline and drift triggers |
+| Offline intent classifier | `core/intent_classifier.py` | `data/index/intent_classifier.pkl` and `data/intent_benchmark.json` |
+| Conflict-aware RAG resolver | `core/conflict_resolver.py` | `/resolve-conflict` API with recency + emotional weighting and contradiction flags |
+| System design doc | `SYSTEM_DESIGN.md` | One-page sync architecture |
+| Self evaluation | `SELF_EVALUATION.md` | Constraints, limitations, next steps |
+
+### Quick L2 Test
+
+```bash
+python build_pipeline.py --csv data/conversations.csv --skip-summarize --force
+python app.py
+```
+
+Then test:
+
+```bash
+curl -X POST http://localhost:5000/intent -H "Content-Type: application/json" -d "{\"message\":\"remind me to call my sister tomorrow\"}"
+curl -X POST http://localhost:5000/resolve-conflict -H "Content-Type: application/json" -d "{\"message\":\"Did I mention anything about my sister?\"}"
+curl http://localhost:5000/persona-drift
+```
+
+The intent module is fully offline and uses no OpenAI/Gemini/Groq calls. It is a small TF-IDF + LogisticRegression model designed to stay well under 50 MB and under 200 ms per message on CPU.
+
+---
+
 ## Architecture Overview
 
 ```

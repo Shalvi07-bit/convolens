@@ -11,6 +11,7 @@ import pickle
 import numpy as np
 import faiss
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import normalize
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from pathlib import Path
 class RAGRetriever:
     def __init__(self, model=None):  # model param kept for API compat
         self.vectorizer: TfidfVectorizer | None = None
+        self.svd: TruncatedSVD | None = None
         self.topic_meta: list[dict] = []
         self.topic_index: faiss.Index | None = None
         self.msg_meta: list[dict] = []
@@ -26,9 +28,12 @@ class RAGRetriever:
     # ── Internal helpers ─────────────────────────────────────────────────────
 
     def _embed(self, texts: list[str]) -> np.ndarray:
-        vecs = self.vectorizer.transform(texts).toarray().astype("float32")
-        norms = np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-9
-        return vecs / norms  # L2-normalised → inner product = cosine
+        sparse_vecs = self.vectorizer.transform(texts)
+        if self.svd is not None:
+            vecs = self.svd.transform(sparse_vecs).astype("float32")
+        else:
+            vecs = sparse_vecs.toarray().astype("float32")
+        return normalize(vecs).astype("float32")
 
     # ── Build ────────────────────────────────────────────────────────────────
 
@@ -55,7 +60,11 @@ class RAGRetriever:
             stop_words="english",
             sublinear_tf=True,
         )
-        self.vectorizer.fit(all_texts)
+        sparse_all = self.vectorizer.fit_transform(all_texts)
+        n_components = min(128, max(2, sparse_all.shape[1] - 1), max(2, sparse_all.shape[0] - 1))
+        print(f"  Fitting SVD projection to {n_components} dims ...")
+        self.svd = TruncatedSVD(n_components=n_components, random_state=42)
+        self.svd.fit(sparse_all)
 
         # Build topic index
         if topic_texts:
@@ -123,6 +132,8 @@ class RAGRetriever:
 
         with open(p / "vectorizer.pkl", "wb") as f:
             pickle.dump(self.vectorizer, f)
+        with open(p / "svd.pkl", "wb") as f:
+            pickle.dump(self.svd, f)
 
         print(f"  Saved indices + vectorizer to {out_dir}")
 
@@ -133,6 +144,10 @@ class RAGRetriever:
         if vpath.exists():
             with open(vpath, "rb") as f:
                 self.vectorizer = pickle.load(f)
+        spath = p / "svd.pkl"
+        if spath.exists():
+            with open(spath, "rb") as f:
+                self.svd = pickle.load(f)
 
         tpath = p / "topic.index"
         if tpath.exists():
